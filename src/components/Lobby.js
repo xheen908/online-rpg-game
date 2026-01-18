@@ -6,6 +6,7 @@ const theme = {
   yellow: '#ff0',
   red: '#f00',
   white: '#fff',
+  cyan: '#00f2ff', // Cyber-Farbe für Map-Wahl
   bgDark: 'rgba(0,0,0,0.95)',
   bgItem: '#111',
   border: '2px solid #ff0'
@@ -22,13 +23,28 @@ const btnBase = {
   clipPath: 'polygon(10% 0, 100% 0, 90% 100%, 0% 100%)',
 };
 
+const mapOptionStyle = (isActive) => ({
+  flex: 1,
+  padding: '10px',
+  textAlign: 'center',
+  cursor: 'pointer',
+  border: isActive ? `2px solid ${theme.cyan}` : '2px solid #333',
+  background: isActive ? 'rgba(0, 242, 255, 0.1)' : 'transparent',
+  color: isActive ? theme.cyan : '#666',
+  fontSize: '0.8rem',
+  fontWeight: 'bold',
+  transition: 'all 0.2s'
+});
+
 export function Lobby({ 
   gameState, activeLobbies, onJoin, onCreate, 
   currentLobby, lobbyPlayers, onLeave, onStart, socketId,
-  chatMessages, chatInput, setChatInput, onSendMessage 
+  chatMessages, chatInput, setChatInput, onSendMessage,
+  selectedMap, onMapChange // NEUE PROPS
 }) {
   
   const hostPlayer = lobbyPlayers.find(p => p.isHost);
+  const isHost = hostPlayer?.id === socketId;
 
   const ActionButton = ({ onClick, style, children }) => (
     <button 
@@ -79,6 +95,25 @@ export function Lobby({
               ENCRYPTED CHANNEL / HOST: <span style={{ color: theme.yellow }}>{hostPlayer ? hostPlayer.name.toUpperCase() : "..."}</span>
             </div>
           </div>
+
+          {/* MAP SELECTION AREA */}
+          <div style={{ marginBottom: '20px' }}>
+            <div style={{ fontSize: '0.7rem', color: theme.cyan, marginBottom: '10px', fontWeight: 'bold' }}>SELECT BATTLEGROUND:</div>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <div 
+                style={mapOptionStyle(selectedMap === 'MAP0')} 
+                onClick={() => isHost && onMapChange('MAP0')}
+              >
+                STANDARD ARENA
+              </div>
+              <div 
+                style={mapOptionStyle(selectedMap === 'MAP1')} 
+                onClick={() => isHost && onMapChange('MAP1')}
+              >
+                CYBER TESTMAP
+              </div>
+            </div>
+          </div>
           
           <div style={playerListContainer}>
             <div style={{ fontSize: '0.8rem', color: theme.yellow, marginBottom: '15px', fontWeight: 'bold', borderBottom: '1px solid #333' }}>
@@ -104,7 +139,7 @@ export function Lobby({
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: 'auto' }}>
-            {hostPlayer?.id === socketId && (
+            {isHost && (
               <ActionButton 
                 onClick={onStart} 
                 style={{ background: theme.yellow, color: '#000', fontSize: '1.3rem', padding: '18px' }}
@@ -121,7 +156,7 @@ export function Lobby({
           </div>
         </div>
 
-        {/* RECHTER BEREICH: GESTRETCHTER CHAT */}
+        {/* RECHTER BEREICH: CHAT */}
         <div style={{ 
           width: '450px', 
           background: 'rgba(0,0,0,0.8)', 
@@ -129,7 +164,6 @@ export function Lobby({
           position: 'relative',
           display: 'flex'
         }}>
-          {/* Wrapper um Chat, damit er den gesamten Kasten ausfüllt */}
           <div style={{ flex: 1, position: 'relative' }}>
             <Chat 
               chatMessages={chatMessages}

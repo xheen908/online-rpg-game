@@ -15,7 +15,7 @@ const DUMMY_SETTINGS = {
   maxHealth: 100 
 };
 
-function DummyModel({ pos, rotY, name, isTargeted, id }) { // 'id' als Prop hinzugefügt
+function DummyModel({ pos, rotY, name, isTargeted, id }) {
   const fbx = useLoader(FBXLoader, DUMMY_SETTINGS.modelPath);
   
   const texture = useLoader(THREE.TextureLoader, DUMMY_SETTINGS.texturePath);
@@ -36,6 +36,9 @@ function DummyModel({ pos, rotY, name, isTargeted, id }) { // 'id' als Prop hinz
         c.castShadow = true;
         c.receiveShadow = true;
         
+        // Markierung für den Player, dieses Objekt physisch zu ignorieren
+        c.userData.noCollision = true;
+        
         if (texture) {
           c.material = new THREE.MeshStandardMaterial({
             map: texture,
@@ -54,7 +57,8 @@ function DummyModel({ pos, rotY, name, isTargeted, id }) { // 'id' als Prop hinz
     <group 
       position={pos} 
       rotation={[0, rotY, 0]}
-      userData={{ isDummy: true, dummyId: id }} // userData zur Identifizierung hinzugefügt
+      // WICHTIG: noCollision auch hier in der Group
+      userData={{ isDummy: true, dummyId: id, noCollision: true }}
     >
       {instance && <primitive object={instance} position={[0, DUMMY_SETTINGS.groundOffset, 0]} />}
       
@@ -86,7 +90,7 @@ export function Dummies({ targetedDummyId }) {
       {dummyList.map(d => (
         <DummyModel 
           key={d.id} 
-          id={d.id} // 'id' an DummyModel übergeben
+          id={d.id}
           pos={d.pos} 
           rotY={d.rotY} 
           name={d.name} 

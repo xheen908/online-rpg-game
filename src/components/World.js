@@ -1,6 +1,6 @@
 import React from 'react';
 import { Sky } from '@react-three/drei';
-import { TronFloor } from './Floor';
+import { TronFloor } from './world/Floor';
 
 /**
  * Die World-Komponente verwaltet die Umgebung (Himmel, Licht) 
