@@ -1,7 +1,4 @@
-**MMORPG-Framework** verschoben, die Terminologie angepasst (Open World, Stats, Persistence) und die Struktur nach Best Practices für skalierbare Online-Rollenspiele optimiert.
-
-```markdown
-# Cyber-Onyxia: 3D Online MMORPG
+# Online Rollplay Game MMORPG Framework
 
 Ein hochperformantes, webbasiertes Massively Multiplayer Online Role-Playing Game (MMORPG) im Stil von World of Warcraft. Das Spiel basiert auf **React**, **Three.js (React Three Fiber)** und **Socket.io** und bietet eine persistente Welt mit Tab-Targeting-Kampfsystem.
 
