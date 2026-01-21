@@ -11,8 +11,17 @@ export function useSpellSystem(onSpellComplete) {
   const playerPosRef = useRef(null);
 
   const calculateDamage = (spell) => {
+    // 1. Zufälligen Basisschaden zwischen min und max berechnen
+    const min = spell.baseDamage.min;
+    const max = spell.baseDamage.max;
+    const randomBaseDamage = Math.floor(Math.random() * (max - min + 1) + min);
+
+    // 2. Kritischen Treffer prüfen
     const isCrit = Math.random() < spell.critChance;
-    const damage = isCrit ? spell.baseDamage * spell.critMultiplier : spell.baseDamage;
+    
+    // 3. Multiplikator anwenden (auf den zufälligen Basiswert)
+    const damage = isCrit ? randomBaseDamage * spell.critMultiplier : randomBaseDamage;
+    
     return { damage: Math.floor(damage), isCrit };
   };
 
@@ -59,7 +68,6 @@ export function useSpellSystem(onSpellComplete) {
         setCastProgress(1);
         const result = calculateDamage(spell);
         
-        // ÄNDERUNG: Wir feuern jetzt PROJECTILE_LAUNCH statt SPELL_HIT
         onSpellComplete?.({
           type: 'PROJECTILE_LAUNCH',
           text: `${spell.name} abgefeuert!`,
@@ -67,9 +75,7 @@ export function useSpellSystem(onSpellComplete) {
           isCrit: result.isCrit,
           damage: result.damage,
           targetId: currentTargetRef.current.id,
-          // Startposition leicht erhöht (Brusthöhe)
           startPos: playerPosRef.current.clone().add(new THREE.Vector3(0, 1.5, 0)),
-          // Zielposition (Brusthöhe des Dummys)
           targetPos: new THREE.Vector3(...currentTargetRef.current.pos).add(new THREE.Vector3(0, 1.5, 0))
         });
 

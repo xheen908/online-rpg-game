@@ -5,6 +5,7 @@ export const usePlayerControls = (gameState) => {
   const [isPaused, setIsPaused] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isRightMouseDown, setIsRightMouseDown] = useState(false);
+  const [isLeftMouseDown, setIsLeftMouseDown] = useState(false);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -19,19 +20,21 @@ export const usePlayerControls = (gameState) => {
     };
 
     const handleMouseDown = (e) => {
-      // Nur Rechtsklick (button 2) erlaubt den Lock
-      if (e.button === 2 && gameState === 'PLAYING' && !isPaused && !isChatOpen) {
+      // PointerLock NUR im Spiel, nicht in Lobby/Login
+      if (gameState !== 'PLAYING' || isPaused || isChatOpen) return;
+
+      if (e.button === 0) { // Links
+        setIsLeftMouseDown(true);
+        controlsRef.current?.lock();
+      } else if (e.button === 2) { // Rechts
         setIsRightMouseDown(true);
-        // Wir fordern den Lock manuell an
         controlsRef.current?.lock();
       }
     };
 
     const handleMouseUp = (e) => {
-      if (e.button === 2) {
-        setIsRightMouseDown(false);
-        controlsRef.current?.unlock();
-      }
+      if (e.button === 0) setIsLeftMouseDown(false);
+      if (e.button === 2) setIsRightMouseDown(false);
     };
 
     const handleContextMenu = (e) => {
@@ -39,7 +42,7 @@ export const usePlayerControls = (gameState) => {
     };
 
     window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('mousedown', handleMouseDown, true); // Use capture to intercept
+    window.addEventListener('mousedown', handleMouseDown, true);
     window.addEventListener('mouseup', handleMouseUp, true);
     window.addEventListener('contextmenu', handleContextMenu);
 
@@ -51,9 +54,13 @@ export const usePlayerControls = (gameState) => {
     };
   }, [gameState, isPaused, isChatOpen]);
 
-  const setupPointerLockOnCanvas = useCallback((gl) => {
-    // Keine automatischen Listener hier
-  }, []);
+  useEffect(() => {
+    if (!isLeftMouseDown && !isRightMouseDown && controlsRef.current?.isLocked) {
+      controlsRef.current.unlock();
+    }
+  }, [isLeftMouseDown, isRightMouseDown]);
+
+  const setupPointerLockOnCanvas = useCallback((gl) => {}, []);
 
   return {
     controlsRef,
@@ -62,6 +69,7 @@ export const usePlayerControls = (gameState) => {
     isChatOpen,
     setIsChatOpen,
     isRightMouseDown,
+    isLeftMouseDown,
     setupPointerLockOnCanvas,
   };
 };

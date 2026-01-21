@@ -12,14 +12,15 @@ import { Player } from './engine/Player';
 import { World } from './World';
 import { EscMenu } from './EscMenu';
 import { RemotePlayer } from './shared/GameElements';
-import { Dummies, initialDummyList } from './Dummies';
+import { Dummies } from './Dummies';
 import { createWallTexture, createFloorTexture, createBridgeTexture } from './TextureLibrary';
-import { SPAWN_POINTS } from './/world/mapData';
+import { SPAWN_POINTS, MAP_DUMMIES } from './world/mapData';
 import { useTabTargeting } from '../hooks/useTabTargeting';
 import { UnitFrames } from './UnitFrames';
 import Interface from './Interface';
 import { Map0 } from './maps/Map0';
 import { Map1 } from './maps/Map1';
+import { WorldMap0 } from './maps/WorldMap0'; 
 import { usePlayerControls } from '../hooks/usePlayerControls';
 import { useSpellSystem } from '../hooks/useSpellSystem';
 import { Frostbolt } from './Frostblitz'; 
@@ -29,9 +30,10 @@ function GameContent({
   controlsRef, isChatOpen, isPaused, setIsMoving, setIsFiring,
   playerName, mySpawnPoint, textures, otherPlayers,
   onPlayerHealthChange, playerPosition, onPlayerPositionChange,
-  setGlobalTargetedId, currentMapId, isRightMouseDown,
-  startCast, cancelCast, castingSpell, dummies, 
-  projectiles, onProjectileHit, combatTexts, onCombatTextComplete 
+  setGlobalTargetedId, currentMapId, isRightMouseDown, isLeftMouseDown,
+  startCast, cancelCast, castingSpell, currentMapDummies, 
+  projectiles, onProjectileHit, combatTexts, onCombatTextComplete,
+  onPortalEnter
 }) {
   const { camera, scene } = useThree();
 
@@ -41,11 +43,19 @@ function GameContent({
     );
   }, [scene.children]);
 
-  const targetedDummyId = useTabTargeting(playerPosition, camera, allSceneObjects, dummies);
+  const targetedDummyId = useTabTargeting(playerPosition, camera, allSceneObjects, currentMapDummies);
 
   useEffect(() => {
     setGlobalTargetedId(targetedDummyId);
   }, [targetedDummyId, setGlobalTargetedId]);
+
+  const renderMap = () => {
+    switch (currentMapId) {
+      case 'HUB': return <WorldMap0 playerPosition={playerPosition} onPortalEnter={onPortalEnter} />;
+      case 'MAP1': return <Map1 playerPosition={playerPosition} onPortalEnter={onPortalEnter} />;
+      default: return <Map0 wallTexture={textures.wall} bridgeTexture={textures.bridge} playerPosition={playerPosition} onPortalEnter={onPortalEnter} />;
+    }
+  };
 
   return (
     <Suspense fallback={null}>
@@ -65,30 +75,20 @@ function GameContent({
         startCast={startCast}
         cancelCast={cancelCast}
         castingSpell={castingSpell}
+        isRightMouseDown={isRightMouseDown}
+        isLeftMouseDown={isLeftMouseDown}
       />
 
-      {currentMapId === 'MAP1' ? <Map1 /> : <Map0 wallTexture={textures.wall} bridgeTexture={textures.bridge} />}
-      <Dummies dummies={dummies} targetedDummyId={targetedDummyId} />
+      {renderMap()}
+
+      <Dummies dummies={currentMapDummies} targetedDummyId={targetedDummyId} />
 
       {projectiles.map(p => (
-        <Frostbolt 
-          key={p.id} 
-          id={p.id} 
-          startPos={p.startPos} 
-          targetPos={p.targetPos} 
-          onHit={onProjectileHit} 
-        />
+        <Frostbolt key={p.id} id={p.id} startPos={p.startPos} targetPos={p.targetPos} onHit={onProjectileHit} />
       ))}
 
       {combatTexts.map(ct => (
-        <CombatText 
-          key={ct.id}
-          position={ct.position}
-          value={ct.value}
-          color={ct.color}
-          isCrit={ct.isCrit}
-          onComplete={() => onCombatTextComplete(ct.id)}
-        />
+        <CombatText key={ct.id} position={ct.position} value={ct.value} color={ct.color} isCrit={ct.isCrit} onComplete={() => onCombatTextComplete(ct.id)} />
       ))}
 
       {otherPlayers && Object.entries(otherPlayers).map(([id, p]) => (
@@ -97,7 +97,7 @@ function GameContent({
 
       <PointerLockControls
         ref={controlsRef}
-        enabled={isRightMouseDown && !isPaused && !isChatOpen}
+        enabled={(isRightMouseDown || isLeftMouseDown) && !isPaused && !isChatOpen}
         selector={null}
       />
     </Suspense>
@@ -106,71 +106,51 @@ function GameContent({
 
 export default function TexturedArena() {
   const [gameState, setGameState] = useState('START');
-  const [activeMap, setActiveMap] = useState('MAP0');
+  const [activeMap, setActiveMap] = useState('HUB'); 
   const [playerName, setPlayerName] = useState("");
   const [currentLobby, setCurrentLobby] = useState(null);
   const [localMessages, setLocalMessages] = useState([]);
-  const [dummies, setDummies] = useState(initialDummyList);
+  const [allMapsDummies, setAllMapsDummies] = useState(MAP_DUMMIES);
   const [projectiles, setProjectiles] = useState([]);
   const [combatTexts, setCombatTexts] = useState([]);
+
+  const currentMapDummies = useMemo(() => allMapsDummies[activeMap] || [], [allMapsDummies, activeMap]);
 
   const handleProjectileHit = useCallback((projectileId) => {
     setProjectiles(prev => {
       const proj = prev.find(p => p.id === projectileId);
       if (proj) {
-        const targetDummy = dummies.find(d => d.id === proj.targetId);
-        
+        const targetDummy = currentMapDummies.find(d => d.id === proj.targetId);
         if (targetDummy) {
           const textId = Math.random().toString();
-          setCombatTexts(prevTexts => [...prevTexts, {
-            id: textId,
-            position: targetDummy.pos,
-            value: proj.damage,
-            color: "yellow",
-            isCrit: proj.isCrit // Crit-Info vom Projektil übernehmen
-          }]);
+          setCombatTexts(prevTexts => [...prevTexts, { id: textId, position: targetDummy.pos, value: proj.damage, color: "yellow", isCrit: proj.isCrit }]);
+          setAllMapsDummies(prev => ({
+            ...prev,
+            [activeMap]: prev[activeMap].map(d => d.id === proj.targetId ? { ...d, health: Math.max(0, d.health - proj.damage) } : d)
+          }));
         }
-
-        setDummies(dums => dums.map(d => 
-          d.id === proj.targetId 
-            ? { ...d, health: Math.max(0, d.health - proj.damage) } 
-            : d
-        ));
-
-        const msg = {
-          text: `${proj.isCrit ? 'KRITISCH! ' : ''}${proj.damage} Schaden!`,
-          color: proj.color,
-          time: Date.now()
-        };
-        setLocalMessages(m => [...m, msg].slice(-50));
+        setLocalMessages(m => [...m, { text: `${proj.isCrit ? 'KRITISCH! ' : ''}${proj.damage} Schaden!`, color: proj.color, time: Date.now() }].slice(-50));
       }
       return prev.filter(p => p.id !== projectileId);
     });
-  }, [dummies]);
+  }, [currentMapDummies, activeMap]);
 
-  const removeCombatText = useCallback((id) => {
-    setCombatTexts(prev => prev.filter(t => t.id !== id));
-  }, []);
+  const removeCombatText = useCallback((id) => setCombatTexts(prev => prev.filter(t => t.id !== id)), []);
 
   const handleSpellComplete = useCallback((result) => {
     if (result.type === 'PROJECTILE_LAUNCH') {
-      const newProj = {
-        id: Math.random().toString(),
-        startPos: result.startPos,
-        targetPos: result.targetPos,
-        targetId: result.targetId,
-        damage: result.damage,
-        color: result.color,
-        isCrit: result.isCrit // WICHTIG: Crit-Status mitsenden
-      };
-      setProjectiles(prev => [...prev, newProj]);
+      setProjectiles(prev => [...prev, { id: Math.random().toString(), startPos: result.startPos, targetPos: result.targetPos, targetId: result.targetId, damage: result.damage, color: result.color, isCrit: result.isCrit }]);
     } else if (result.text) {
         setLocalMessages(prev => [...prev, { ...result, time: Date.now() }].slice(-50));
     }
   }, []);
 
   const { castingSpell, castProgress, startCast, cancelCast } = useSpellSystem(handleSpellComplete);
-  const { controlsRef, isPaused, setIsPaused, isChatOpen, setIsChatOpen, isRightMouseDown, setupPointerLockOnCanvas } = usePlayerControls(gameState);
+  
+  const { 
+    controlsRef, isPaused, setIsPaused, isChatOpen, setIsChatOpen, 
+    isRightMouseDown, isLeftMouseDown 
+  } = usePlayerControls(gameState);
 
   const [chatInput, setChatInput] = useState("");
   const [isMoving, setIsMoving] = useState(false);
@@ -180,7 +160,7 @@ export default function TexturedArena() {
   const [playerCurrentPosition, setPlayerCurrentPosition] = useState(new THREE.Vector3());
   const [targetedDummyId, setTargetedDummyId] = useState(null);
 
-  const { activeLobbies = [], lobbyPlayers = [], chatMessages = [], otherPlayers = {} } = useGameSocket(setGameState);
+  const { chatMessages = [], otherPlayers = {}, activeLobbies = [], lobbyPlayers = [] } = useGameSocket(setGameState);
   const allMessages = useMemo(() => [...chatMessages, ...localMessages], [chatMessages, localMessages]);
 
   const mySpawnPoint = useMemo(() => {
@@ -188,9 +168,7 @@ export default function TexturedArena() {
     return SPAWN_POINTS[index % SPAWN_POINTS.length] || SPAWN_POINTS[0];
   }, [lobbyPlayers]);
 
-  const textures = useMemo(() => ({
-    wall: createWallTexture(), floor: createFloorTexture(), bridge: createBridgeTexture()
-  }), []);
+  const textures = useMemo(() => ({ wall: createWallTexture(), floor: createFloorTexture(), bridge: createBridgeTexture() }), []);
 
   const handleSendMessage = () => {
     if (chatInput.trim()) {
@@ -202,12 +180,11 @@ export default function TexturedArena() {
 
   const handleMapChange = (mapId) => {
     setActiveMap(mapId);
-    if (currentLobby) {
-      socket.emit('changeMap', { lobbyId: currentLobby, mapId });
-    }
+    setTargetedDummyId(null);
+    if (currentLobby) socket.emit('changeMap', { lobbyId: currentLobby, mapId });
   };
 
-  const targetedDummy = useMemo(() => dummies.find(d => d.id === targetedDummyId), [targetedDummyId, dummies]);
+  const targetedDummy = useMemo(() => currentMapDummies.find(d => d.id === targetedDummyId), [targetedDummyId, currentMapDummies]);
 
   const handleStartCast = useCallback((spellId) => {
     if (startCast) startCast(spellId, playerCurrentPosition, targetedDummy);
@@ -219,7 +196,7 @@ export default function TexturedArena() {
         <>
           <UnitFrames
             playerName={playerName} playerHealth={playerCurrentHealth} playerMaxHealth={playerMaxHealth}
-            targetName={targetedDummy?.name} targetHealth={targetedDummy?.health || 0} targetMaxHealth={100000}
+            targetName={targetedDummy?.name} targetHealth={targetedDummy?.health || 0} targetMaxHealth={targetedDummy?.maxHealth || 100000}
           />
           <Interface castingSpell={castingSpell} castProgress={castProgress} />
         </>
@@ -252,14 +229,11 @@ export default function TexturedArena() {
         />
       )}
 
-      {gameState === 'PLAYING' && isPaused && <EscMenu onResume={() => setIsPaused(false)} onLeave={() => {
-        socket.emit('leaveLobby', currentLobby);
-        setGameState('LOBBY_SELECTION');
-      }} />}
+      {gameState === 'PLAYING' && isPaused && <EscMenu onResume={() => setIsPaused(false)} onLeave={() => { socket.emit('leaveLobby', currentLobby); setGameState('LOBBY_SELECTION'); }} />}
 
       {gameState === 'PLAYING' && <Chat chatMessages={allMessages} chatInput={chatInput} setChatInput={setChatInput} onSend={handleSendMessage} isActive={isChatOpen} />}
 
-      <Canvas shadows camera={{ fov: 75 }} onCreated={({ gl }) => setupPointerLockOnCanvas(gl)}>
+      <Canvas shadows camera={{ fov: 75 }}>
         <GameContent
           controlsRef={controlsRef} isChatOpen={isChatOpen} isPaused={isPaused}
           setIsMoving={setIsMoving} setIsFiring={setIsFiring} playerName={playerName}
@@ -270,14 +244,16 @@ export default function TexturedArena() {
           setGlobalTargetedId={setTargetedDummyId}
           currentMapId={activeMap}
           isRightMouseDown={isRightMouseDown}
+          isLeftMouseDown={isLeftMouseDown}
           startCast={handleStartCast}
           cancelCast={cancelCast}
           castingSpell={castingSpell}
-          dummies={dummies}
+          currentMapDummies={currentMapDummies}
           projectiles={projectiles}
           onProjectileHit={handleProjectileHit}
           combatTexts={combatTexts}
           onCombatTextComplete={removeCombatText}
+          onPortalEnter={handleMapChange} 
         />
       </Canvas>
     </div>

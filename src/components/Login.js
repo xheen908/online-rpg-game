@@ -26,7 +26,7 @@ export function Login({ playerName, setPlayerName, onEnter }) {
 
       <div style={containerStyle}>
         <div style={glitchWrapper}>
-          <h1 style={headerStyle}>Doom Next.js</h1>
+          <h1 style={headerStyle}>Next_RPG_Arena.js</h1>
         </div>
         
         <p style={subHeaderStyle}>IDENTIFICATION REQUIRED</p>
@@ -36,7 +36,7 @@ export function Login({ playerName, setPlayerName, onEnter }) {
             value={playerName} 
             onChange={(e) => setPlayerName(e.target.value)} 
             onKeyDown={handleKeyDown}
-            placeholder="ENTER PILOT NAME..."
+            placeholder="NAME..."
             style={inputStyle} 
             autoFocus
           />

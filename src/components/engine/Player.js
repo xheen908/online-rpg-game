@@ -16,19 +16,16 @@ const PLAYER_SETTINGS = {
 export function Player({ 
   setMovingState, onShoot, isPaused, playerName, spawnPoint, 
   onPlayerHealthChange, onPlayerPositionChange,
-  startCast, cancelCast, castingSpell 
+  startCast, cancelCast, castingSpell, isRightMouseDown, isLeftMouseDown 
 }) {
   const { camera, scene } = useThree();
   const moveState = useRef({ 
     forward: false, backward: false, left: false, right: false, 
-    jump: false, rotateLeft: false, rotateRight: false, isRightClickPressed: false 
+    jump: false, rotateLeft: false, rotateRight: false
   });
   
-  const initialPos = spawnPoint?.pos || [15, 3, 50];
-  const initialRot = spawnPoint?.rot || 0;
-  
-  const playerPos = useRef(new THREE.Vector3(...initialPos));
-  const [currentRotY, setCurrentRotY] = useState(initialRot);
+  const playerPos = useRef(new THREE.Vector3(...(spawnPoint?.pos || [15, 3, 50])));
+  const [currentRotY, setCurrentRotY] = useState(spawnPoint?.rot || 0);
   const velocity = useRef(new THREE.Vector3(0, 0, 0));
   const lastUpdate = useRef(0);
   const [moving, setMoving] = useState(false);
@@ -45,8 +42,8 @@ export function Player({
 
   useEffect(() => {
     camera.rotation.order = 'YXZ'; 
-    camera.rotation.y = initialRot;
-  }, [camera, initialRot]);
+    camera.rotation.y = spawnPoint?.rot || 0;
+  }, [camera, spawnPoint]);
 
   useEffect(() => {
     const onWheel = (e) => {
@@ -60,22 +57,31 @@ export function Player({
   useFrame((state, delta) => {
     if (isPaused) return;
 
-    const isRMB = moveState.current.isRightClickPressed;
-    if (!isRMB) {
+    const anyMouseDown = isRightMouseDown || isLeftMouseDown;
+
+    // Charakter folgt Kamera nur bei Rechtsklick
+    if (isRightMouseDown) {
+      if (Math.abs(currentRotY - camera.rotation.y) > 0.001) {
+        setCurrentRotY(camera.rotation.y);
+      }
+    }
+    
+    // Tastatur-Rotation NUR wenn keine Maus gehalten wird
+    if (!anyMouseDown) {
       if (moveState.current.rotateLeft) camera.rotation.y += 2.0 * delta;
       if (moveState.current.rotateRight) camera.rotation.y -= 2.0 * delta;
+      if (Math.abs(currentRotY - camera.rotation.y) > 0.001) setCurrentRotY(camera.rotation.y);
     }
     
-    if (Math.abs(currentRotY - camera.rotation.y) > 0.001) setCurrentRotY(camera.rotation.y);
-    
+    // Strafe Logik: Wenn Maus gehalten, werden A/D zu Seitwärtsschritten
+    const isStrafeLeft = anyMouseDown && moveState.current.rotateLeft;
+    const isStrafeRight = anyMouseDown && moveState.current.rotateRight;
+
     const isMovingNow = moveState.current.forward || moveState.current.backward || 
                         moveState.current.left || moveState.current.right ||
-                        (isRMB && (moveState.current.rotateLeft || moveState.current.rotateRight));
+                        isStrafeLeft || isStrafeRight;
     
-    // Zauber abbrechen bei Bewegung
-    if (isMovingNow && castingSpell) {
-      cancelCast();
-    }
+    if (isMovingNow && castingSpell) cancelCast();
 
     if (isMovingNow !== moving) {
       setMoving(isMovingNow);
@@ -89,10 +95,13 @@ export function Player({
     const moveDir = { forward: false, backward: false, left: false, right: false };
     const velocityVec = new THREE.Vector3(0, 0, 0);
 
+    // Vorwärts / Rückwärts
     if (moveState.current.forward) { velocityVec.add(forward); moveDir.forward = true; }
     if (moveState.current.backward) { velocityVec.sub(forward); moveDir.backward = true; }
-    if (moveState.current.left || (isRMB && moveState.current.rotateLeft)) { velocityVec.sub(right); moveDir.left = true; }
-    if (moveState.current.right || (isRMB && moveState.current.rotateRight)) { velocityVec.add(right); moveDir.right = true; }
+    
+    // Seitwärts (Q/E immer, A/D nur wenn Maus gehalten)
+    if (moveState.current.left || isStrafeLeft) { velocityVec.sub(right); moveDir.left = true; }
+    if (moveState.current.right || isStrafeRight) { velocityVec.add(right); moveDir.right = true; }
     
     if (velocityVec.length() > 0) {
       velocityVec.normalize().multiplyScalar(PLAYER_SETTINGS.speed);
@@ -100,7 +109,6 @@ export function Player({
       const checkCollision = (dir) => {
         const nextPos = playerPos.current.clone().add(dir);
         if (MAP[Math.floor(nextPos.z / GRID_SIZE + 0.5)]?.[Math.floor(nextPos.x / GRID_SIZE + 0.5)] === 1) return true;
-        
         raycaster.ray.origin.copy(playerPos.current).add(new THREE.Vector3(0, 1, 0));
         raycaster.ray.direction.copy(dir).normalize();
         raycaster.far = PLAYER_SETTINGS.playerRadius;
@@ -163,34 +171,29 @@ export function Player({
     const down = (e) => {
       const k = { KeyW: 'forward', KeyS: 'backward', KeyQ: 'left', KeyE: 'right', KeyA: 'rotateLeft', KeyD: 'rotateRight', Space: 'jump' };
       if (k[e.code]) moveState.current[k[e.code]] = true;
-      
-      // Taste '1' für Frostblitz
-      if (e.code === 'Digit1' && !isPaused && startCast) {
-        startCast('FROSTBOLT');
-      }
+      if (e.code === 'Digit1' && !isPaused && startCast) startCast('FROSTBOLT');
     };
     const up = (e) => {
       const k = { KeyW: 'forward', KeyS: 'backward', KeyQ: 'left', KeyE: 'right', KeyA: 'rotateLeft', KeyD: 'rotateRight', Space: 'jump' };
       if (k[e.code]) moveState.current[k[e.code]] = false;
     };
     const mDown = (e) => {
-      if (e.button === 0 && !isPaused) { onShoot(true); setTimeout(() => onShoot(false), 100); }
-      if (e.button === 2) moveState.current.isRightClickPressed = true;
+      if (e.button === 0 && !isPaused && !isLeftMouseDown && !isRightMouseDown) { 
+        onShoot(true); setTimeout(() => onShoot(false), 100); 
+      }
     };
-    const mUp = (e) => { if (e.button === 2) moveState.current.isRightClickPressed = false; };
     const contextMenu = (e) => e.preventDefault();
 
     window.addEventListener('keydown', down); 
     window.addEventListener('keyup', up);
     window.addEventListener('mousedown', mDown);
-    window.addEventListener('mouseup', mUp);
     window.addEventListener('contextmenu', contextMenu);
     return () => { 
       window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); 
-      window.removeEventListener('mousedown', mDown); window.removeEventListener('mouseup', mUp);
+      window.removeEventListener('mousedown', mDown);
       window.removeEventListener('contextmenu', contextMenu);
     };
-  }, [onShoot, isPaused, startCast]); 
+  }, [onShoot, isPaused, startCast, isLeftMouseDown, isRightMouseDown]); 
   
   return (
     <PlayerModel 
@@ -199,12 +202,7 @@ export function Player({
       isLocal={true} 
       isMoving={moving} 
       isGrounded={groundedState}
-      moveDirection={moving ? {
-          forward: moveState.current.forward,
-          backward: moveState.current.backward,
-          left: moveState.current.left || (moveState.current.isRightClickPressed && moveState.current.rotateLeft),
-          right: moveState.current.right || (moveState.current.isRightClickPressed && moveState.current.rotateRight)
-      } : null}
+      moveDirection={moving ? moveState.current : null}
       name={playerName}
     />
   );

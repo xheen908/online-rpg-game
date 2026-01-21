@@ -1,10 +1,28 @@
 import React from 'react';
-import { Box } from '@react-three/drei';
+import { Box, Sphere, Text } from '@react-three/drei';
+import { useFrame } from '@react-three/fiber';
+import * as THREE from 'three';
 import { MAP, GRID_SIZE, ARENA_STRUCTURE } from '../world/mapData';
 
-export function Map0({ wallTexture, bridgeTexture }) {
+export function Map0({ wallTexture, bridgeTexture, playerPosition, onPortalEnter }) {
+  const exitPos = new THREE.Vector3(0, 2, 0);
+
+  useFrame(() => {
+    if (playerPosition && playerPosition.distanceTo(exitPos) < 2) {
+      onPortalEnter('HUB');
+    }
+  });
+
   return (
     <group name="Map0_Schergrat">
+      {/* Rückkehr-Portal zum Hub */}
+      <group position={exitPos.toArray()}>
+        <Text position={[0, 3, 0]} fontSize={0.8} color="#fff">EXIT TO HUB</Text>
+        <Sphere args={[1, 16, 16]}>
+          <meshStandardMaterial color="#fff" emissive="#fff" emissiveIntensity={1} wireframe />
+        </Sphere>
+      </group>
+
       {/* Wände aus dem Grid */}
       {MAP.map((row, z) => row.map((cell, x) => cell === 1 && (
         <Box key={`wall-${x}-${z}`} position={[x * GRID_SIZE, 5, z * GRID_SIZE]} args={[GRID_SIZE, 10, GRID_SIZE]}>
