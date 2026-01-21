@@ -1,7 +1,7 @@
 import React, { useRef, Suspense, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { PlayerModel } from './PlayerModel'; // Import von der neuen Datei
+import { PlayerModel } from '../engine/PlayerModel'; // Import von der neuen Datei
 
 export function RemotePlayer(props) {
   const meshRef = useRef();

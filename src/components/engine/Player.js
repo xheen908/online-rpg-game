@@ -3,7 +3,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { socket } from '../../hooks/useGameSocket'; 
 import { MAP, GRID_SIZE } from '../world/mapData'; 
-import { PlayerModel } from '../shared/PlayerModel';
+import { PlayerModel } from './PlayerModel';
 
 const PLAYER_SETTINGS = {
   maxHealth: 100,
